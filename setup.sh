@@ -42,14 +42,17 @@ run_command "Création du fichier de configuration TypeScript (tsconfig.json)" "
 run_command "Installation d'Angular CLI" "npm install -g @angular/cli"
 
 # Vérifier si le projet Angular existe déjà
-if [ ! -d "frontend" ]; then
-    run_command "Création du projet Angular 'frontend'" "ng new frontend --directory ./frontend --routing --style=css --skip-install"
+# Utilise la variable d'environnement APP_NAME, avec "frontend" comme valeur par défaut
+APP_NAME=${APP_NAME:-frontend}
+
+if [ ! -d "$APP_NAME" ]; then
+    run_command "Création du projet Angular '$APP_NAME'" "ng new $APP_NAME --directory ./$APP_NAME --routing --style=css --skip-install"
 else
-    log_action "Projet Angular 'frontend' déjà existant. Saut de l'étape."
+    log_action "Projet Angular '$APP_NAME' déjà existant. Saut de l'étape."
 fi
 
-# Aller dans le dossier frontend pour installer Tailwind
-cd frontend
+# Aller dans le dossier de l'application pour installer les dépendances
+cd $APP_NAME
 
 run_command "Installation des dépendances pour Angular" "npm install"
 run_command "Installation de Tailwind CSS pour Angular" "npm install -D tailwindcss postcss autoprefixer && npx tailwindcss init"
@@ -59,7 +62,7 @@ cd ..
 
 log_action "Configuration de Tailwind CSS..."
 # Configuration de tailwind.config.js
-cat > ./frontend/tailwind.config.js << EOL
+cat > ./tailwind.config.js << EOL
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -73,7 +76,7 @@ module.exports = {
 EOL
 
 # Configuration de styles.css pour inclure Tailwind
-cat > ./frontend/src/styles.css << EOL
+cat > ./src/styles.css << EOL
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -113,7 +116,7 @@ node -e "let pkg = require('./package.json'); \
          pkg.scripts = { \
            ...pkg.scripts, \
            'start:backend': 'nodemon --watch src --exec ts-node src/server.ts', \
-           'start:frontend': 'cd frontend && ng serve --host 0.0.0.0 --port 4200', \
+           'start:frontend': "cd $APP_NAME && ng serve --host 0.0.0.0 --port ${FRONTEND_PORT}", \
            'build:backend': 'tsc' \
          }; \
          require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));"

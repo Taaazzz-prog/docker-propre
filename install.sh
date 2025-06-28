@@ -61,6 +61,43 @@ prompt_for_port() {
     done
 }
 
+# Vérifie si un nom de conteneur Docker est déjà utilisé
+is_container_name_in_use() {
+    local name=$1
+    # Recherche un conteneur existant (même stoppé) avec ce nom exact.
+    # La commande retourne le nom du conteneur s'il est trouvé, sinon une chaîne vide.
+    if [ -n "$(docker ps -a --filter "name=^/${name}$" --format '{{.Names}}')" ]; then
+        return 0 # Le nom est utilisé (succès pour la condition if)
+    else
+        return 1 # Le nom est libre
+    fi
+    if ! docker info >/dev/null 2>&1; then
+        error "Le daemon Docker ne semble pas fonctionner. Veuillez le démarrer avant de continuer."
+    fi
+}
+
+# Demande à l'utilisateur un nom de conteneur, en vérifiant sa disponibilité
+prompt_for_container_name() {
+    local var_name=$1
+    local default_name=$2
+    local prompt_message=$3
+    local new_name
+
+    while true; do
+        read -p "$prompt_message [$default_name]: " new_name
+        new_name=${new_name:-$default_name} # Utilise la valeur par défaut si l'entrée est vide
+
+        if is_container_name_in_use "$new_name"; then
+            echo -e "\033[1;33m[ATTENTION]\033[0m Le nom de conteneur '$new_name' est déjà utilisé. Veuillez en choisir un autre."
+            # Suggère un nouveau nom en ajoutant un suffixe
+            default_name="${new_name}-alt"
+        else
+            eval "$var_name=\$$new_name"
+            break
+        fi
+    done
+}
+
 # --- Début du Script d'Installation ---
 
 info "Bienvenue dans l'installateur de projet personnalisé."
@@ -96,6 +133,10 @@ prompt_for_port FRONTEND_PORT $FRONTEND_PORT "Entrez le port pour le frontend (A
 prompt_for_port BACKEND_PORT $BACKEND_PORT "Entrez le port pour le backend (Express)"
 prompt_for_port MONGO_PORT $MONGO_PORT "Entrez le port pour la base de données (MongoDB)"
 
+# Noms des conteneurs
+prompt_for_container_name APP_CONTAINER_NAME "${APP_CONTAINER_NAME:-my-app-container}" "Entrez le nom pour le conteneur de l'application"
+prompt_for_container_name MONGO_CONTAINER_NAME "${MONGO_CONTAINER_NAME:-my-mongo-container}" "Entrez le nom pour le conteneur de la base de données"
+
 # --- Génération du Fichier .env ---
 
 info "Génération du fichier .env avec votre configuration..."
@@ -106,6 +147,8 @@ APP_NAME=${APP_NAME}
 FRONTEND_PORT=${FRONTEND_PORT}
 BACKEND_PORT=${BACKEND_PORT}
 MONGO_PORT=${MONGO_PORT}
+APP_CONTAINER_NAME=${APP_CONTAINER_NAME}
+MONGO_CONTAINER_NAME=${MONGO_CONTAINER_NAME}
 EOL
 
 success "Fichier .env généré avec succès !"
@@ -118,11 +161,41 @@ echo "----------------------------------------"
 info "Lancement de l'environnement Docker..."
 info "La première fois, cela peut prendre plusieurs minutes pour tout installer."
 
-docker compose up --build -d
+# Lancement et vérification
+if ! docker compose up --build -d; then
+    error "Le lancement de Docker Compose a échoué. Vérifiez les messages d'erreur ci-dessus."
+fi
 
-if [ $? -eq 0 ]; then
-    success "L'environnement a été lancé avec succès en arrière-plan (-d)!"
-    info "Pour voir les logs, utilisez la commande : docker compose logs -f"
+info "Attente de la stabilisation des conteneurs (15 secondes)..."
+sleep 15
+
+# Vérification de l'état des conteneurs après le lancement
+services=("app" "mongo")
+all_running=true
+for service in "${services[@]}"; do
+    # Récupère le nom du conteneur à partir du service Docker Compose
+    container_name=$(docker compose ps -q "$service")
+    if [ -z "$container_name" ]; then
+        error "Impossible de trouver le conteneur pour le service '$service'."
+        all_running=false
+        continue
+    fi
+
+    # Vérifie si le conteneur est en cours d'exécution
+    if ! docker inspect -f '{{.State.Running}}' "$container_name" | grep "true" > /dev/null; then
+        echo
+        error "Le service '$service' n'a pas démarré correctement."
+        info "Voici les derniers logs du conteneur pour vous aider à diagnostiquer :"
+        echo "-------------------- LOGS DE $service --------------------"
+        docker logs "$container_name" --tail 50
+        echo "---------------------------------------------------"
+        all_running=false
+    fi
+done
+
+if [ "$all_running" = true ]; then
+    success "L'environnement a été lancé et tous les services sont opérationnels !"
+    info "Pour voir les logs en direct, utilisez : docker compose logs -f"
     info "Pour arrêter l'environnement, utilisez : docker compose down"
     echo
     info "--- Accès ---"
@@ -130,5 +203,5 @@ if [ $? -eq 0 ]; then
     info "Backend (API): http://localhost:${BACKEND_PORT}/api"
     info "MongoDB: localhost:${MONGO_PORT}"
 else
-    error "Une erreur est survenue lors du lancement de docker compose."
+    error "Certains services n'ont pas pu démarrer. Veuillez corriger les erreurs ci-dessus et relancer."
 fi

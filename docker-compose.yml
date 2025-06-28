@@ -1,15 +1,15 @@
 # Spécifie la version de la syntaxe Docker Compose utilisée. '3.8' est une version moderne et stable.
-version: '3.8'
 
 # La section 'services' est l'endroit où vous définissez les conteneurs qui composent votre application.
 services:
   # 'app' est le nom que nous donnons à notre service principal (l'application Node.js/Angular).
   app:
+    # Donne un nom personnalisé au conteneur pour le retrouver facilement.
+    container_name: ${APP_CONTAINER_NAME}
     # 'build: .' indique à Docker Compose de construire une image à partir du Dockerfile
     # qui se trouve dans le répertoire courant (le même que ce fichier).
     build: .
     # Donne un nom personnalisé au conteneur pour le retrouver facilement.
-    container_name: my-app-container
     # 'ports' mappe les ports de votre machine hôte (à gauche) aux ports du conteneur (à droite).
     ports:
       # Mappe le port de l'hôte (défini dans .env) au port 3000 du conteneur (pour le serveur Express).
@@ -39,11 +39,12 @@ services:
 
   # 'mongo' est le nom de notre service de base de données.
   mongo:
+    # Nom personnalisé pour le conteneur de la base de données.
+    container_name: ${MONGO_CONTAINER_NAME}
     # 'image: mongo:latest' indique à Docker de télécharger la dernière image officielle de MongoDB
     # depuis Docker Hub, au lieu de la construire nous-mêmes.
     image: mongo:latest
     # Nom personnalisé pour le conteneur de la base de données.
-    container_name: my-mongo-container
     # Mappe le port 27017 de l'hôte au port 27017 du conteneur, le port par défaut de MongoDB.
     ports:
       # Mappe le port 27018 de l'hôte au port 27017 du conteneur.

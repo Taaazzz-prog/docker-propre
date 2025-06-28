@@ -1,0 +1,60 @@
+# Spécifie la version de la syntaxe Docker Compose utilisée. '3.8' est une version moderne et stable.
+version: '3.8'
+
+# La section 'services' est l'endroit où vous définissez les conteneurs qui composent votre application.
+services:
+  # 'app' est le nom que nous donnons à notre service principal (l'application Node.js/Angular).
+  app:
+    # 'build: .' indique à Docker Compose de construire une image à partir du Dockerfile
+    # qui se trouve dans le répertoire courant (le même que ce fichier).
+    build: .
+    # Donne un nom personnalisé au conteneur pour le retrouver facilement.
+    container_name: my-app-container
+    # 'ports' mappe les ports de votre machine hôte (à gauche) aux ports du conteneur (à droite).
+    ports:
+      # Mappe le port 3000 de l'hôte au port 3000 du conteneur (pour le serveur Express).
+      - "3000:3000"
+      # Mappe le port 4200 de l'hôte au port 4200 du conteneur (pour le serveur de développement Angular).
+      - "4200:4200"
+    # 'volumes' permet de synchroniser des fichiers/dossiers entre votre machine hôte et le conteneur.
+    volumes:
+      # Synchronise le répertoire courant de votre machine ('.') avec '/usr/src/app' dans le conteneur.
+      # Cela vous permet de modifier votre code en direct sans avoir à reconstruire l'image.
+      - .:/usr/src/app
+      # Ceci est une astuce pour éviter que le dossier 'node_modules' de votre machine locale
+      # n'écrase celui qui est installé à l'intérieur du conteneur. C'est une bonne pratique.
+      - /usr/src/app/node_modules
+    # 'depends_on' s'assure que le service 'mongo' est démarré AVANT le service 'app'.
+    # C'est crucial car notre application a besoin que la base de données soit prête.
+    depends_on:
+      - mongo
+    # 'environment' définit des variables d'environnement disponibles à l'intérieur du conteneur 'app'.
+    environment:
+      # Nous passons l'URI de connexion à MongoDB. 'mongo' est le nom du service MongoDB,
+      # Docker Compose le résoudra automatiquement en l'adresse IP interne du conteneur mongo.
+      - MONGO_URI=mongodb://mongo:27017/mydatabase
+
+  # 'mongo' est le nom de notre service de base de données.
+  mongo:
+    # 'image: mongo:latest' indique à Docker de télécharger la dernière image officielle de MongoDB
+    # depuis Docker Hub, au lieu de la construire nous-mêmes.
+    image: mongo:latest
+    # Nom personnalisé pour le conteneur de la base de données.
+    container_name: my-mongo-container
+    # Mappe le port 27017 de l'hôte au port 27017 du conteneur, le port par défaut de MongoDB.
+    ports:
+      # Mappe le port 27018 de l'hôte au port 27017 du conteneur.
+      # Nous utilisons 27018 car 27017 est déjà utilisé sur votre machine.
+      - "27018:27017"
+    # 'volumes' est aussi utilisé ici pour la persistance des données.
+    volumes:
+      # Mappe un volume nommé 'mongo-data' au dossier '/data/db' à l'intérieur du conteneur.
+      # C'est là que MongoDB stocke ses données. Sans cela, vous perdriez toutes vos données
+      # à chaque fois que vous redémarrez le conteneur.
+      - mongo-data:/data/db
+
+# La section 'volumes' de haut niveau est l'endroit où les volumes nommés sont déclarés.
+volumes:
+  # Déclare le volume 'mongo-data'. Docker gère la création et l'emplacement de ce volume
+  # sur votre machine hôte, garantissant que les données de la base de données persistent.
+  mongo-data:

@@ -79,27 +79,47 @@ Et voilà ! Ton environnement de développement est prêt, fonctionnel et isolé
 
 Ton environnement tourne en arrière-plan. Voici comment interagir avec lui :
 
-*   **Pour voir ce qu'il se passe (les logs)** :
+*   **Pour espionner ce que fabriquent tes conteneurs (les logs)** :
     ```bash
     docker compose logs -f
     ```
-    *(Appuie sur `Ctrl+C` pour quitter)*
+    Ça va cracher tout ce qu'il se passe en temps réel. Parfait pour jouer les détectives quand un truc foire. *(Appuie sur `Ctrl+C` pour arrêter de les harceler)*
 
-*   **Pour tout arrêter proprement** :
+*   **Pour leur dire d'aller se coucher (arrêter les conteneurs)** :
     ```bash
     docker compose down
     ```
+    Ça arrête tout proprement. Les conteneurs dorment, mais ils n'ont rien oublié. Si tu les relances, ils reprennent où ils en étaient (sauf la base de données qui perdra ses données si elle n'est pas dans un volume persistant, mais t'inquiète, c'est le cas ici).
 
-*   **Pour tout arrêter ET supprimer les données de la base de données (pour repartir de zéro)** :
+*   **Pour tout mettre à la poubelle (arrêter ET supprimer les données)** :
     ```bash
     docker compose down --volumes
     ```
+    Là, c'est plus sérieux. Non seulement tu les arrêtes, mais tu balances aussi leur mémoire (le volume de la base de données) aux ordures. C'est l'option "je veux repartir de zéro, comme si rien de tout ça n'était jamais arrivé".
+
+*   **L'OPTION NUCLÉAIRE : Quand tout est foutu (`docker-cleanup.sh`)**
+    Parfois, t'as tellement merdé que même `docker compose down` ne suffit plus. T'as des images qui traînent, des réseaux fantômes... Bref, c'est le chaos.
+    Pas de panique, j'ai prévu un bouton rouge pour toi.
+
+    D'abord, on le rend exécutable (juste la première fois, pas la peine de le faire à chaque fois, t'es pas un robot) :
+    ```bash
+    chmod +x docker-cleanup.sh
+    ```
+    Et maintenant, le grand nettoyage :
+    ```bash
+    ./docker-cleanup.sh
+    ```
+    Ce script est l'agent d'entretien ultime. Il va **arrêter et supprimer tous les conteneurs**, **nettoyer les réseaux** et **supprimer les images Docker** liées à ce projet. Après son passage, ton système est aussi propre qu'un sou neuf. C'est radical, mais putain, c'est efficace.
 
 ## Comment ça marche sous le capot ? (Pour les curieux)
 
-*   [`docker-compose.yml`](docker-compose.yml) : C'est le plan de construction. Il décrit les services (app, mongo), comment ils sont connectés, et quels ports ils utilisent, en se basant sur ton fichier `.env`.
-*   [`Dockerfile`](Dockerfile) : C'est la recette de cuisine pour notre conteneur principal. Il explique comment prendre une version de Node.js, copier notre code, et installer les dépendances.
-*   [`setup.sh`](setup.sh) : C'est un petit script qui s'exécute **une seule fois** à l'intérieur du conteneur. C'est lui qui installe Angular CLI et crée ton projet avec le nom que tu as choisi.
+*   [`install.sh`](install.sh) : Le chef d'orchestre. C'est ton assistant personnel, celui qui te pose des questions et qui s'assure que ton environnement est taillé sur mesure pour toi. C'est lui qui crie les ordres.
+*   [`setup.sh`](setup.sh) : L'installateur. Une fois que le conteneur principal est lancé, ce petit gars s'exécute **une seule fois** pour installer Angular et créer la structure de base de ton projet. Il prépare le terrain.
+*   [`docker-cleanup.sh`](docker-cleanup.sh) : Le nettoyeur. Quand tu veux faire table rase et tout effacer sans laisser de traces, c'est ton homme. Radical et sans pitié.
+*   [`docker-compose.yml`](docker-compose.yml) : Le plan de l'architecte. Ce fichier, c'est la carte. Il dit à Docker : "Construis-moi un service web comme ça, une base de données comme ci, et fais-les communiquer entre eux." Il utilise les variables de ton fichier `.env` pour ne pas tout écrire en dur comme un débutant.
+*   [`Dockerfile`](Dockerfile) : La recette de cuisine. Il explique, étape par étape, comment construire l'image de ton application : "Prends une base Node.js, ajoute ces paquets, copie le code source, et lance cette commande au démarrage."
+*   [`.env.example`](.env.example) : Le pense-bête. C'est le modèle pour ton fichier de configuration personnel. Il te montre toutes les variables que tu DOIS définir.
+*   `.env` : Ta configuration secrète. Ce fichier est généré par `install.sh` avec TES réponses. Il contient les ports, les noms, etc. Il est ignoré par Git pour que tu ne partages pas tes petits secrets avec tout le monde. C'est TON fichier, pas touche.
 
 ---
 

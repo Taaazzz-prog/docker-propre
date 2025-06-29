@@ -61,41 +61,58 @@ prompt_for_port() {
     done
 }
 
+# Valide le format d'un nom de conteneur Docker
+is_valid_container_name() {
+    local name=$1
+    # Doit commencer par une lettre ou un chiffre, et ne contenir que des lettres, chiffres, tirets, underscores ou points.
+    if [[ "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]+$ ]]; then
+        return 0 # Valide
+    else
+        return 1 # Invalide
+    fi
+}
+
 # Vérifie si un nom de conteneur Docker est déjà utilisé
 is_container_name_in_use() {
     local name=$1
-    # Recherche un conteneur existant (même stoppé) avec ce nom exact.
-    # La commande retourne le nom du conteneur s'il est trouvé, sinon une chaîne vide.
     if [ -n "$(docker ps -a --filter "name=^/${name}$" --format '{{.Names}}')" ]; then
-        return 0 # Le nom est utilisé (succès pour la condition if)
+        return 0 # Le nom est utilisé
     else
         return 1 # Le nom est libre
-    fi
-    if ! docker info >/dev/null 2>&1; then
-        error "Le daemon Docker ne semble pas fonctionner. Veuillez le démarrer avant de continuer."
     fi
 }
 
 # Demande à l'utilisateur un nom de conteneur, en vérifiant sa disponibilité
 prompt_for_container_name() {
-    local var_name=$1
-    local default_name=$2
-    local prompt_message=$3
+    local default_name=$1
+    local prompt_message=$2
     local new_name
 
     while true; do
         read -p "$prompt_message [$default_name]: " new_name
         new_name=${new_name:-$default_name} # Utilise la valeur par défaut si l'entrée est vide
 
-        if is_container_name_in_use "$new_name"; then
+        if ! is_valid_container_name "$new_name"; then
+            echo -e "\033[1;31m[ERREUR]\033[0m Nom de conteneur invalide. Il doit commencer par une lettre ou un chiffre et ne peut contenir que des lettres, chiffres, '_', '.' ou '-'."
+        elif is_container_name_in_use "$new_name"; then
             echo -e "\033[1;33m[ATTENTION]\033[0m Le nom de conteneur '$new_name' est déjà utilisé. Veuillez en choisir un autre."
-            # Suggère un nouveau nom en ajoutant un suffixe
             default_name="${new_name}-alt"
         else
-            eval "$var_name=\$$new_name"
+            printf "%s" "$new_name" # Retourne le nom validé
             break
         fi
     done
+}
+
+# Trouve un port disponible en commençant par un port de base
+find_available_port() {
+    local port=$1
+    while is_port_in_use "$port"; do
+        # Redirige le message d'info vers stderr pour ne pas être capturé par $()
+        info "Le port $port est déjà utilisé. Recherche du prochain port disponible..." >&2
+        port=$((port + 1))
+    done
+    echo "$port" # Seul le numéro de port est envoyé à stdout
 }
 
 # --- Début du Script d'Installation ---
@@ -122,20 +139,28 @@ fi
 # Chargement des variables depuis .env.example pour les valeurs par défaut
 source .env.example
 
-# --- Configuration Interactive ---
+# --- Configuration Interactive (Désactivée pour le débogage) ---
 
-# Nom de l'application
-read -p "Entrez le nom de votre application Angular [$APP_NAME]: " new_app_name
-APP_NAME=${new_app_name:-$APP_NAME}
+info "Utilisation des valeurs par défaut pour accélérer le débogage."
 
-# Ports
-prompt_for_port FRONTEND_PORT $FRONTEND_PORT "Entrez le port pour le frontend (Angular)"
-prompt_for_port BACKEND_PORT $BACKEND_PORT "Entrez le port pour le backend (Express)"
-prompt_for_port MONGO_PORT $MONGO_PORT "Entrez le port pour la base de données (MongoDB)"
+# Les valeurs sont chargées depuis .env.example
+# Pour le débogage, nous forçons ces valeurs et vérifions la disponibilité des ports.
+APP_NAME=${APP_NAME:-my-angular-app}
+MONGO_PORT=${MONGO_PORT:-27018} # Le port Mongo est moins susceptible de conflicter
 
-# Noms des conteneurs
-prompt_for_container_name APP_CONTAINER_NAME "${APP_CONTAINER_NAME:-my-app-container}" "Entrez le nom pour le conteneur de l'application"
-prompt_for_container_name MONGO_CONTAINER_NAME "${MONGO_CONTAINER_NAME:-my-mongo-container}" "Entrez le nom pour le conteneur de la base de données"
+# Vérification et ajustement automatique des ports
+info "Vérification de la disponibilité des ports..."
+ORIGINAL_FRONTEND_PORT=${FRONTEND_PORT:-4200}
+FRONTEND_PORT=$(find_available_port "$ORIGINAL_FRONTEND_PORT")
+if [ "$FRONTEND_PORT" != "$ORIGINAL_FRONTEND_PORT" ]; then
+    info "Le port frontend a été ajusté à \033[1;33m$FRONTEND_PORT\033[0m car le port $ORIGINAL_FRONTEND_PORT était occupé."
+fi
+
+ORIGINAL_BACKEND_PORT=${BACKEND_PORT:-3000}
+BACKEND_PORT=$(find_available_port "$ORIGINAL_BACKEND_PORT")
+if [ "$BACKEND_PORT" != "$ORIGINAL_BACKEND_PORT" ]; then
+    info "Le port backend a été ajusté à \033[1;33m$BACKEND_PORT\033[0m car le port $ORIGINAL_BACKEND_PORT était occupé."
+fi
 
 # --- Génération du Fichier .env ---
 
@@ -147,8 +172,6 @@ APP_NAME=${APP_NAME}
 FRONTEND_PORT=${FRONTEND_PORT}
 BACKEND_PORT=${BACKEND_PORT}
 MONGO_PORT=${MONGO_PORT}
-APP_CONTAINER_NAME=${APP_CONTAINER_NAME}
-MONGO_CONTAINER_NAME=${MONGO_CONTAINER_NAME}
 EOL
 
 success "Fichier .env généré avec succès !"
@@ -157,6 +180,11 @@ cat .env
 echo "----------------------------------------"
 
 # --- Lancement de Docker Compose ---
+
+info "Nettoyage de tout environnement Docker précédent..."
+# L'option --remove-orphans supprime les conteneurs pour les services qui n'existent plus dans le fichier compose.
+# L'option -v supprime les volumes nommés.
+docker compose down --remove-orphans -v
 
 info "Lancement de l'environnement Docker..."
 info "La première fois, cela peut prendre plusieurs minutes pour tout installer."
@@ -173,23 +201,24 @@ sleep 15
 services=("app" "mongo")
 all_running=true
 for service in "${services[@]}"; do
-    # Récupère le nom du conteneur à partir du service Docker Compose
-    container_name=$(docker compose ps -q "$service")
-    if [ -z "$container_name" ]; then
-        error "Impossible de trouver le conteneur pour le service '$service'."
-        all_running=false
-        continue
-    fi
-
-    # Vérifie si le conteneur est en cours d'exécution
-    if ! docker inspect -f '{{.State.Running}}' "$container_name" | grep "true" > /dev/null; then
+    # On tente d'exécuter une commande simple dans le service.
+    # Si elle échoue, le service n'est pas prêt.
+    if ! docker compose exec "$service" echo "Vérification du service $service..." > /dev/null 2>&1; then
         echo
-        error "Le service '$service' n'a pas démarré correctement."
+        error "Le service '$service' n'a pas répondu correctement."
         info "Voici les derniers logs du conteneur pour vous aider à diagnostiquer :"
         echo "-------------------- LOGS DE $service --------------------"
-        docker logs "$container_name" --tail 50
+        # On récupère l'ID du conteneur pour les logs
+        container_id=$(docker compose ps -q "$service")
+        if [ -n "$container_id" ]; then
+            docker logs "$container_id" --tail 50
+        else
+            echo "Impossible de récupérer les logs pour le service '$service'."
+        fi
         echo "---------------------------------------------------"
         all_running=false
+    else
+        success "Le service '$service' est opérationnel."
     fi
 done
 

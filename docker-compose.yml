@@ -5,10 +5,14 @@ services:
   # 'app' est le nom que nous donnons à notre service principal (l'application Node.js/Angular).
   app:
     # Donne un nom personnalisé au conteneur pour le retrouver facilement.
-    container_name: ${APP_CONTAINER_NAME}
     # 'build: .' indique à Docker Compose de construire une image à partir du Dockerfile
     # qui se trouve dans le répertoire courant (le même que ce fichier).
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
     # Donne un nom personnalisé au conteneur pour le retrouver facilement.
     # 'ports' mappe les ports de votre machine hôte (à gauche) aux ports du conteneur (à droite).
     ports:
@@ -24,6 +28,11 @@ services:
       # Ceci est une astuce pour éviter que le dossier 'node_modules' de votre machine locale
       # n'écrase celui qui est installé à l'intérieur du conteneur. C'est une bonne pratique.
       - /usr/src/app/node_modules
+    # 'command' spécifie la commande à exécuter lorsque le conteneur démarre.
+    # 'npm start' lancera les serveurs backend et frontend comme défini dans package.json.
+    # On exécute setup.sh au démarrage pour s'assurer que tout est en place,
+    # puis on lance l'application. Le 'sh -c' est nécessaire pour chaîner les commandes.
+    command: sh -c "chown -R node:node . && su-exec node ./setup.sh && su-exec node npm start"
     # 'depends_on' s'assure que le service 'mongo' est démarré AVANT le service 'app'.
     # C'est crucial car notre application a besoin que la base de données soit prête.
     depends_on:
@@ -40,7 +49,6 @@ services:
   # 'mongo' est le nom de notre service de base de données.
   mongo:
     # Nom personnalisé pour le conteneur de la base de données.
-    container_name: ${MONGO_CONTAINER_NAME}
     # 'image: mongo:latest' indique à Docker de télécharger la dernière image officielle de MongoDB
     # depuis Docker Hub, au lieu de la construire nous-mêmes.
     image: mongo:latest

@@ -33,20 +33,21 @@ else
 fi
 
 run_command "Installation du serveur Express, Mongoose et CORS" "npm install express mongoose cors"
-run_command "Installation des dépendances de développement pour TypeScript (serveur)" "npm install -D typescript @types/node @types/express ts-node nodemon"
+run_command "Installation des dépendances de développement (serveur et utilitaires)" "npm install -D typescript @types/node @types/express ts-node nodemon concurrently @angular/cli"
 
 # Création d'un tsconfig.json pour le backend
 run_command "Création du fichier de configuration TypeScript (tsconfig.json)" "npx tsc --init --rootDir src --outDir dist --lib es6 --module commonjs --resolveJsonModule true"
 
 # Installation d'Angular
-run_command "Installation d'Angular CLI" "npm install -g @angular/cli"
+# On n'installe plus globalement pour éviter les problèmes de permissions et de versioning
+# run_command "Installation d'Angular CLI" "npm install -g @angular/cli"
 
 # Vérifier si le projet Angular existe déjà
 # Utilise la variable d'environnement APP_NAME, avec "frontend" comme valeur par défaut
 APP_NAME=${APP_NAME:-frontend}
 
 if [ ! -d "$APP_NAME" ]; then
-    run_command "Création du projet Angular '$APP_NAME'" "ng new $APP_NAME --directory ./$APP_NAME --routing --style=css --skip-install"
+    run_command "Création du projet Angular '$APP_NAME'" "npx ng new $APP_NAME --directory ./$APP_NAME --routing --style=css --skip-install"
 else
     log_action "Projet Angular '$APP_NAME' déjà existant. Saut de l'étape."
 fi
@@ -55,14 +56,13 @@ fi
 cd $APP_NAME
 
 run_command "Installation des dépendances pour Angular" "npm install"
-run_command "Installation de Tailwind CSS pour Angular" "npm install -D tailwindcss postcss autoprefixer && npx tailwindcss init"
-
+run_command "Installation des dépendances de Tailwind CSS (v3)" "npm install -D tailwindcss@^3.0.0 postcss@^8.0.0 autoprefixer@^10.0.0"
 # Revenir au répertoire racine
 cd ..
 
 log_action "Configuration de Tailwind CSS..."
 # Configuration de tailwind.config.js
-cat > ./tailwind.config.js << EOL
+cat > ./${APP_NAME}/tailwind.config.js << EOL
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -75,8 +75,18 @@ module.exports = {
 }
 EOL
 
+# Configuration de postcss.config.js
+cat > ./${APP_NAME}/postcss.config.js << EOL
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+EOL
+
 # Configuration de styles.css pour inclure Tailwind
-cat > ./src/styles.css << EOL
+cat > ./${APP_NAME}/src/styles.css << EOL
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -115,18 +125,15 @@ log_action "Mise à jour du package.json avec les scripts de lancement"
 node -e "let pkg = require('./package.json'); \
          pkg.scripts = { \
            ...pkg.scripts, \
+           'start': 'concurrently \\"npm:start:backend\\" \\"npm:start:frontend\\"', \
            'start:backend': 'nodemon --watch src --exec ts-node src/server.ts', \
-           'start:frontend': "cd $APP_NAME && ng serve --host 0.0.0.0 --port ${FRONTEND_PORT}", \
-           'build:backend': 'tsc' \
+           'start:frontend': 'cd ' + (process.env.APP_NAME || 'frontend') + ' && ng serve --host 0.0.0.0 --port 4200 --disable-host-check', \
+           'build:backend': 'tsc', \
+           'postinstall': 'cd ' + (process.env.APP_NAME || 'frontend') + ' && npm install' \
          }; \
          require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
 
 
 # --- FIN DU SCRIPT ---
 log_action "INSTALLATION TERMINÉE AVEC SUCCÈS !"
-log_action "Vous pouvez maintenant lancer les serveurs."
-log_action "Backend: npm run start:backend"
-log_action "Frontend: npm run start:frontend"
-
-# Garde le conteneur en vie pour que vous puissiez vous y attacher
-tail -f /dev/null
+log_action "L'image est prête. La commande 'npm start' lancera les serveurs."

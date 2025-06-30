@@ -139,14 +139,38 @@ fi
 # Chargement des variables depuis .env.example pour les valeurs par défaut
 source .env.example
 
-# --- Configuration Interactive (Désactivée pour le débogage) ---
+# --- Configuration Interactive ---
 
-info "Utilisation des valeurs par défaut pour accélérer le débogage."
+read -p "Voulez-vous utiliser la configuration interactive ? (o/N) " use_interactive
+use_interactive=${use_interactive:-n}
 
-# Les valeurs sont chargées depuis .env.example
-# Pour le débogage, nous forçons ces valeurs et vérifions la disponibilité des ports.
-APP_NAME=${APP_NAME:-my-angular-app}
-MONGO_PORT=${MONGO_PORT:-27018} # Le port Mongo est moins susceptible de conflicter
+if [[ "$use_interactive" =~ ^[oO](ui)?$ ]]; then
+    # Demander le nom de l'application
+    read -p "Entrez le nom de votre application [${APP_NAME:-my-angular-app}]: " new_app_name
+    APP_NAME=${new_app_name:-${APP_NAME:-my-angular-app}}
+
+    # Demander le nom de la base de données
+    read -p "Entrez le nom de la base de données [${MONGO_DB_NAME:-mydatabase}]: " new_db_name
+    MONGO_DB_NAME=${new_db_name:-${MONGO_DB_NAME:-mydatabase}}
+
+    # Demander les noms des conteneurs
+    APP_CONTAINER_NAME=$(prompt_for_container_name "${APP_CONTAINER_NAME:-${APP_NAME}-app}" "Entrez le nom du conteneur pour l'application")
+    MONGO_CONTAINER_NAME=$(prompt_for_container_name "${MONGO_CONTAINER_NAME:-${APP_NAME}-mongo}" "Entrez le nom du conteneur pour MongoDB")
+
+    # Demander les ports
+    prompt_for_port FRONTEND_PORT "${FRONTEND_PORT:-4200}" "Entrez le port pour le frontend (Angular)"
+    prompt_for_port BACKEND_PORT "${BACKEND_PORT:-3000}" "Entrez le port pour le backend (Express)"
+    prompt_for_port MONGO_PORT "${MONGO_PORT:-27018}" "Entrez le port pour la base de données (MongoDB)"
+else
+    info "Utilisation de la configuration par défaut."
+    APP_NAME=${APP_NAME:-my-angular-app}
+    MONGO_DB_NAME=${MONGO_DB_NAME:-mydatabase}
+    APP_CONTAINER_NAME=${APP_CONTAINER_NAME:-my-app-container}
+    MONGO_CONTAINER_NAME=${MONGO_CONTAINER_NAME:-my-mongo-container}
+    FRONTEND_PORT=${FRONTEND_PORT:-4200}
+    BACKEND_PORT=${BACKEND_PORT:-3000}
+    MONGO_PORT=${MONGO_PORT:-27018}
+fi
 
 # Vérification et ajustement automatique des ports
 info "Vérification de la disponibilité des ports..."
@@ -162,6 +186,12 @@ if [ "$BACKEND_PORT" != "$ORIGINAL_BACKEND_PORT" ]; then
     info "Le port backend a été ajusté à \033[1;33m$BACKEND_PORT\033[0m car le port $ORIGINAL_BACKEND_PORT était occupé."
 fi
 
+ORIGINAL_MONGO_PORT=${MONGO_PORT:-27018}
+MONGO_PORT=$(find_available_port "$ORIGINAL_MONGO_PORT")
+if [ "$MONGO_PORT" != "$ORIGINAL_MONGO_PORT" ]; then
+    info "Le port Mongo a été ajusté à \033[1;33m$MONGO_PORT\033[0m car le port $ORIGINAL_MONGO_PORT était occupé."
+fi
+
 # --- Génération du Fichier .env ---
 
 info "Génération du fichier .env avec votre configuration..."
@@ -172,6 +202,9 @@ APP_NAME=${APP_NAME}
 FRONTEND_PORT=${FRONTEND_PORT}
 BACKEND_PORT=${BACKEND_PORT}
 MONGO_PORT=${MONGO_PORT}
+MONGO_DB_NAME=${MONGO_DB_NAME:-mydatabase}
+APP_CONTAINER_NAME=${APP_CONTAINER_NAME:-my-app-container}
+MONGO_CONTAINER_NAME=${MONGO_CONTAINER_NAME:-my-mongo-container}
 EOL
 
 success "Fichier .env généré avec succès !"
@@ -185,6 +218,16 @@ info "Nettoyage de tout environnement Docker précédent..."
 # L'option --remove-orphans supprime les conteneurs pour les services qui n'existent plus dans le fichier compose.
 # L'option -v supprime les volumes nommés.
 docker compose down --remove-orphans -v
+
+# Forcer la suppression des conteneurs s'ils existent
+if [ -n "$(docker ps -a -q -f name=^/${APP_CONTAINER_NAME}$)" ]; then
+    info "Suppression du conteneur existant : ${APP_CONTAINER_NAME}"
+    docker rm -f "${APP_CONTAINER_NAME}"
+fi
+if [ -n "$(docker ps -a -q -f name=^/${MONGO_CONTAINER_NAME}$)" ]; then
+    info "Suppression du conteneur existant : ${MONGO_CONTAINER_NAME}"
+    docker rm -f "${MONGO_CONTAINER_NAME}"
+fi
 
 info "Lancement de l'environnement Docker..."
 info "La première fois, cela peut prendre plusieurs minutes pour tout installer."

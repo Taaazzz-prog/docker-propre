@@ -75,6 +75,17 @@ Si tout s'est bien passé, le script t'affichera les adresses pour accéder à t
 
 Et voilà ! Ton environnement de développement est prêt, fonctionnel et isolé.
 
+### Étape 5 : Lancer l'application (parce que c'est pas fini, évidemment)
+
+Bon, l'environnement est prêt, c'est super. Mais l'application, elle, ne s'est pas encore lancée toute seule comme par magie.
+
+Maintenant, et c'est une étape cruciale que beaucoup semblent oublier, il faut **aller dans le dossier du projet** (oui, celui où tu as lancé le script et choisi le nom de ton truc) et taper la commande suivante :
+
+```bash
+npm start
+```
+
+Incroyable, non ? Cette commande va enfin démarrer le serveur de développement Angular. Sans ça, tu risques de regarder une page blanche pendant un bon moment en te demandant ce qui ne va pas. Ne sois pas cette personne.
 ## La vie après l'installation : Commandes utiles
 
 Ton environnement tourne en arrière-plan. Voici comment interagir avec lui :
@@ -99,9 +110,10 @@ Ton environnement tourne en arrière-plan. Voici comment interagir avec lui :
 
 *   **L'OPTION NUCLÉAIRE : Quand tout est foutu (`docker-cleanup.sh`)**
     Parfois, t'as tellement merdé que même `docker compose down` ne suffit plus. T'as des images qui traînent, des réseaux fantômes... Bref, c'est le chaos.
-    Pas de panique, j'ai prévu un bouton rouge pour toi.
+    Pas de panique, j'ai prévu un bouton rouge pour toi (va pas faire péter l'Ukraine).
 
-    D'abord, on le rend exécutable (juste la première fois, pas la peine de le faire à chaque fois, t'es pas un robot) :
+    D'abord, on le rend exécutable (juste la première fois, pas la peine de le faire à chaque fois, t'es pas un robot, tout dépend de qui on parle évidement) :
+
     ```bash
     chmod +x docker-cleanup.sh
     ```
@@ -109,7 +121,7 @@ Ton environnement tourne en arrière-plan. Voici comment interagir avec lui :
     ```bash
     ./docker-cleanup.sh
     ```
-    Ce script est l'agent d'entretien ultime. Il va **arrêter et supprimer tous les conteneurs**, **nettoyer les réseaux** et **supprimer les images Docker** liées à ce projet. Après son passage, ton système est aussi propre qu'un sou neuf. C'est radical, mais putain, c'est efficace.
+    Ce script est l'agent d'entretien ultime. Il va **arrêter et supprimer tous les conteneurs**, **nettoyer les réseaux** et **supprimer les images Docker** liées à ce projet. Après son passage, ton système est aussi propre qu'un slip neuf. C'est radical, mais putain, c'est efficace.
 
 ## Comment ça marche sous le capot ? (Pour les curieux)
 

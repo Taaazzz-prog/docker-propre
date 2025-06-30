@@ -105,7 +105,7 @@ const port = 3000;
 app.use(cors());
 app.use(express.json());
 
-const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/mydatabase';
+const mongoUri = process.env.MONGO_URI || \`mongodb://localhost:27017/\${process.env.MONGO_DB_NAME || 'mydatabase'}\`;
 
 mongoose.connect(mongoUri)
   .then(() => console.log('Connexion à MongoDB réussie !'))

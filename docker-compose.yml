@@ -4,7 +4,7 @@
 services:
   # 'app' est le nom que nous donnons à notre service principal (l'application Node.js/Angular).
   app:
-    # Donne un nom personnalisé au conteneur pour le retrouver facilement.
+    container_name: ${APP_CONTAINER_NAME}
     # 'build: .' indique à Docker Compose de construire une image à partir du Dockerfile
     # qui se trouve dans le répertoire courant (le même que ce fichier).
     build:
@@ -41,14 +41,14 @@ services:
     environment:
       # Nous passons l'URI de connexion à MongoDB. 'mongo' est le nom du service MongoDB,
       # Docker Compose le résoudra automatiquement en l'adresse IP interne du conteneur mongo.
-      - MONGO_URI=mongodb://mongo:27017/mydatabase
+      - MONGO_URI=mongodb://mongo:27017/${MONGO_DB_NAME}
       # Passe les variables d'environnement au conteneur pour que setup.sh puisse les utiliser
       - APP_NAME=${APP_NAME}
       - FRONTEND_PORT=${FRONTEND_PORT}
 
   # 'mongo' est le nom de notre service de base de données.
   mongo:
-    # Nom personnalisé pour le conteneur de la base de données.
+    container_name: ${MONGO_CONTAINER_NAME}
     # 'image: mongo:latest' indique à Docker de télécharger la dernière image officielle de MongoDB
     # depuis Docker Hub, au lieu de la construire nous-mêmes.
     image: mongo:latest
